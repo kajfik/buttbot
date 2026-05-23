@@ -14,7 +14,7 @@ export default (client: Client, databases: Sequelize[], tagsArray: ModelStatic<M
       await database.query("PRAGMA journal_mode=WAL;");
       await database.query("PRAGMA synchronous=NORMAL;");
       await database.query("PRAGMA busy_timeout=5000;");
-      console.log(`Authenticated ${database.options.storage}`);
+      console.log(`Authenticated ${(database as Sequelize & { options: { storage?: string } }).options.storage}`);
     }
 
     for (const tag of tagsArray) {
