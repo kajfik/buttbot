@@ -161,11 +161,14 @@ export const assummarize: Command = {
 
     const action = interaction.options.getString("action");
 
+    const guildId = interaction.guildId;
+    const isTestServer = !!ids.testServerID && guildId === ids.testServerID;
+    if (!guildId || (guildId !== ids.AD.serverID && !isTestServer)) {
+      await interaction.reply({ content: "This command isn't available in this server.", flags: MessageFlags.Ephemeral });
+      return;
+    }
+
     if (action === "in" || action === "out") {
-      if (interaction.guildId !== ids.AD.serverID) {
-        await interaction.reply({ content: "This command isn't available in this server.", flags: MessageFlags.Ephemeral });
-        return;
-      }
       const existing = await tags.summarizeOptIn.findOne({ where: { userID: interaction.user.id } });
       if (action === "in") {
         if (existing) {
@@ -195,7 +198,7 @@ export const assummarize: Command = {
       return;
     }
 
-    if (interaction.guildId !== ids.AD.serverID || interaction.channelId !== SUMMARIZE_CFG.channelID) {
+    if (!isTestServer && interaction.channelId !== SUMMARIZE_CFG.channelID) {
       await interaction.reply({ content: "This command isn't available in this channel.", flags: MessageFlags.Ephemeral });
       return;
     }
@@ -211,7 +214,7 @@ export const assummarize: Command = {
       return;
     }
 
-    const key = stateKey(interaction.guildId, interaction.channelId);
+    const key = stateKey(guildId, interaction.channelId);
     const state = await loadState(key);
     const lastAt = Number(state.lastSummaryAt) || 0;
     const now = Date.now();
