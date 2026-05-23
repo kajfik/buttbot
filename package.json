@@ -1,0 +1,23 @@
+{
+  "name": "buttbot",
+  "version": "0.1.0",
+  "description": "Personal Discord bot — hosts /assummarize for the AD server.",
+  "main": "dist/bot.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/bot.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.98.0",
+    "discord.js": "14.22.1",
+    "sequelize": "6.37.7",
+    "sqlite3": "5.1.7"
+  },
+  "devDependencies": {
+    "@types/node": "18.0.3",
+    "typescript": "5.9.3"
+  },
+  "engines": {
+    "node": "18"
+  }
+}

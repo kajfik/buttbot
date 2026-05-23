@@ -1,0 +1,17 @@
+{
+  "ids": {
+    "kajfik": "1465755655960006821",
+    "AD": {
+      "serverID": "351476683016241162",
+      "summarize": {
+        "channelID": "416286671202549771",
+        "cooldownMs": 18000000,
+        "cooldownMessages": 100,
+        "messageLimit": 100,
+        "windowMs": 43200000,
+        "maxMessages": 2000,
+        "model": "claude-sonnet-4-6"
+      }
+    }
+  }
+}
