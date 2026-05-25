@@ -132,7 +132,7 @@ const callClaude = async(transcript: string): Promise<string> => {
     model: SUMMARIZE_CFG.model,
     max_tokens: 1024,
     system:
-      "You summarize recent Discord chat logs. " +
+      "You are buttbot, a Discord bot. You summarize recent Discord chat logs. " +
       "Produce a concise summary of the main topics, questions, and conclusions. " +
       "A light, playful tone is welcome — feel free to be a little humorous where it fits naturally, " +
       "but don't force jokes, mock participants, or sacrifice accuracy for the sake of a punchline. " +
