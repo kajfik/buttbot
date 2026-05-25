@@ -79,9 +79,12 @@ const collectMessages = async(channel: TextBasedChannel, anchorId: string | null
   return collected;
 };
 
+const REPLY_QUOTE_MAX = 80;
+
 const buildTranscript = async(messages: Message[]): Promise<{ transcript: string; sentCount: number }> => {
   const optInRows = await tags.summarizeOptIn.findAll();
   const optIn = new Set<string>(optInRows.map(r => r.userID));
+  const byId = new Map<string, Message>(messages.map(m => [m.id, m]));
   const chronological = [...messages].reverse();
   const lines: string[] = [];
   let sentCount = 0;
@@ -91,7 +94,24 @@ const buildTranscript = async(messages: Message[]): Promise<{ transcript: string
     const content = m.content?.trim();
     if (!content) continue;
     const name = m.member?.displayName ?? m.author.username;
-    lines.push(`${name}: ${content}`);
+
+    let replyAnnotation = "";
+    const refId = m.reference?.messageId;
+    if (refId) {
+      const ref = byId.get(refId);
+      if (ref && !ref.author.bot) {
+        const refName = ref.member?.displayName ?? ref.author.username;
+        if (optIn.has(ref.author.id) && ref.content?.trim()) {
+          const quote = ref.content.trim();
+          const truncated = quote.length > REPLY_QUOTE_MAX ? `${quote.slice(0, REPLY_QUOTE_MAX)}…` : quote;
+          replyAnnotation = ` (replying to ${refName}: "${truncated}")`;
+        } else {
+          replyAnnotation = ` (replying to ${refName})`;
+        }
+      }
+    }
+
+    lines.push(`${name}${replyAnnotation}: ${content}`);
     sentCount++;
   }
   return { transcript: lines.join("\n"), sentCount };
