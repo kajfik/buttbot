@@ -8,7 +8,7 @@ import { ids } from "../config.json";
 import { tags } from "../bot";
 
 const SUMMARIZE_CFG = ids.AD.summarize;
-const EMBED_DESCRIPTION_LIMIT = 4000;
+const EMBED_DESCRIPTION_LIMIT = 3900;
 const FETCH_PAGE_SIZE = 100;
 
 const stateKey = (guildId: string, channelId: string) => `${guildId}:${channelId}`;
@@ -142,10 +142,9 @@ const callClaude = async(transcript: string): Promise<string> => {
       "may be missing — replies to unseen messages, participants in a conversation, or whole sides of a " +
       "discussion may be absent. " +
       "Discord spoiler syntax is ||text||. ONLY wrap content in ||...|| if that exact content appeared " +
-      "inside ||...|| in the original messages — in that case you MUST preserve the spoiler tags so it " +
-      "stays hidden, and never paraphrase spoilered content out from behind its tags. Do NOT add spoiler " +
-      "tags to content that was not spoilered in the source, even if it discusses late-game mechanics, " +
-      "endgame content, or anything you might consider a spoiler — only the original author's tagging decides. " +
+      "inside ||...|| in the original messages. " +
+      "In Discord, a line starting with '> ' is a quote — the user is quoting something (often from " +
+      "another message), not saying it themselves. " +
       "Keep the summary under 3500 characters.",
     messages: [{ role: "user", content: `Summarize the following chat log:\n\n${transcript}` }],
   });
@@ -298,10 +297,14 @@ export const assummarize: Command = {
     const oldestTs = collected[collected.length - 1].createdTimestamp;
     const periodLabel = formatDuration(newestTs - oldestTs);
 
+    const description = state.lastSummaryMessageLink
+      ? `Previous summary: [Jump to message](${state.lastSummaryMessageLink})\n\n${summary}`
+      : summary;
+
     const embed = new EmbedBuilder()
       .setColor(Colors.DarkAqua)
       .setTitle(`Channel summary (last ${periodLabel}, ${sentCount}/${collected.length} messages sent to AI)`)
-      .setDescription(summary)
+      .setDescription(description)
       .setFooter({
         text:
           `Requested by ${interaction.user.username} • model: ${SUMMARIZE_CFG.model} • ` +
@@ -309,13 +312,25 @@ export const assummarize: Command = {
       })
       .setTimestamp();
 
-    if (state.lastSummaryMessageLink) {
-      embed.addFields({ name: "Previous summary", value: `[Jump to message](${state.lastSummaryMessageLink})` });
-    }
-
+    const previousSummaryMessageId = state.lastSummarizedMessageId;
     const replyMessage = await interaction.editReply({ embeds: [embed] });
 
     const messageLink = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${replyMessage.id}`;
+
+    if (previousSummaryMessageId) {
+      try {
+        const prevMsg = await channel.messages.fetch(previousSummaryMessageId);
+        const prevEmbed = prevMsg.embeds[0];
+        if (prevEmbed) {
+          const updatedEmbed = EmbedBuilder.from(prevEmbed)
+            .addFields({ name: "Next summary", value: `[Jump to message](${messageLink})` });
+          await prevMsg.edit({ embeds: [updatedEmbed] });
+        }
+      } catch (err) {
+        console.error("assummarize: failed to add next-summary link to previous summary:", err);
+      }
+    }
+
     await state.update({
       lastSummaryAt: String(now),
       lastSummaryMessageLink: messageLink,
