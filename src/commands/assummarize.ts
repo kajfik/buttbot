@@ -1,5 +1,5 @@
 import {
-  ApplicationCommandOptionType, ApplicationCommandType, ChatInputCommandInteraction, Collection, Colors,
+  ApplicationCommandType, ChatInputCommandInteraction, Collection, Colors,
   EmbedBuilder, Message, MessageFlags, TextBasedChannel
 } from "discord.js";
 import Anthropic from "@anthropic-ai/sdk";
@@ -84,6 +84,8 @@ const REPLY_QUOTE_MAX = 80;
 const buildTranscript = async(messages: Message[]): Promise<{ transcript: string; sentCount: number }> => {
   const optInRows = await tags.summarizeOptIn.findAll();
   const optIn = new Set<string>(optInRows.map(r => r.userID));
+  const nickRows = await tags.summarizeNick.findAll();
+  const nicks = new Map<string, string>(nickRows.map(r => [r.userID, r.nick]));
   const byId = new Map<string, Message>(messages.map(m => [m.id, m]));
   const chronological = [...messages].reverse();
   const lines: string[] = [];
@@ -93,14 +95,14 @@ const buildTranscript = async(messages: Message[]): Promise<{ transcript: string
     if (!optIn.has(m.author.id)) continue;
     const content = m.content?.trim();
     if (!content) continue;
-    const name = m.member?.displayName ?? m.author.username;
+    const name = nicks.get(m.author.id) ?? m.member?.displayName ?? m.author.username;
 
     let replyAnnotation = "";
     const refId = m.reference?.messageId;
     if (refId) {
       const ref = byId.get(refId);
       if (ref && !ref.author.bot) {
-        const refName = ref.member?.displayName ?? ref.author.username;
+        const refName = nicks.get(ref.author.id) ?? ref.member?.displayName ?? ref.author.username;
         if (optIn.has(ref.author.id) && ref.content?.trim()) {
           const quote = ref.content.trim();
           const truncated = quote.length > REPLY_QUOTE_MAX ? `${quote.slice(0, REPLY_QUOTE_MAX)}…` : quote;
@@ -163,57 +165,13 @@ export const assummarize: Command = {
   name: "assummarize",
   description: "Summarizes recent discussion in this channel using AI.",
   type: ApplicationCommandType.ChatInput,
-  options: [
-    {
-      name: "action",
-      description: "Optional action to perform instead of summarizing.",
-      type: ApplicationCommandOptionType.String,
-      required: false,
-      choices: [
-        { name: "Opt in (allow your messages to be included in summaries)", value: "in" },
-        { name: "Opt out (exclude your messages from summaries)", value: "out" }
-      ]
-    }
-  ],
   run: async(interaction: ChatInputCommandInteraction) => {
     if (!interaction || !interaction.isChatInputCommand()) return;
-
-    const action = interaction.options.getString("action");
 
     const guildId = interaction.guildId;
     const isTestServer = !!ids.testServerID && guildId === ids.testServerID;
     if (!guildId || (guildId !== ids.AD.serverID && !isTestServer)) {
       await interaction.reply({ content: "This command isn't available in this server.", flags: MessageFlags.Ephemeral });
-      return;
-    }
-
-    if (action === "in" || action === "out") {
-      const existing = await tags.summarizeOptIn.findOne({ where: { userID: interaction.user.id } });
-      if (action === "in") {
-        if (existing) {
-          await interaction.reply({
-            content: "You're already opted in. Your messages can be included in /assummarize output.",
-            flags: MessageFlags.Ephemeral,
-          });
-        } else {
-          await tags.summarizeOptIn.create({ userID: interaction.user.id });
-          await interaction.reply({
-            content: "You have opted in. Your messages may now be included in /assummarize output.",
-            flags: MessageFlags.Ephemeral,
-          });
-        }
-      } else if (existing) {
-        await existing.destroy();
-        await interaction.reply({
-          content: "You have opted out. Your messages will no longer be included in /assummarize output.",
-          flags: MessageFlags.Ephemeral,
-        });
-      } else {
-        await interaction.reply({
-          content: "You're already opted out. Your messages are not included in /assummarize output.",
-          flags: MessageFlags.Ephemeral,
-        });
-      }
       return;
     }
 
@@ -308,7 +266,7 @@ export const assummarize: Command = {
       .setFooter({
         text:
           `Requested by ${interaction.user.username} • model: ${SUMMARIZE_CFG.model} • ` +
-          `opt in with /assummarize action:in`,
+          `opt in with /assummary optin`,
       })
       .setTimestamp();
 
