@@ -147,6 +147,9 @@ const callClaude = async(transcript: string): Promise<string> => {
       "inside ||...|| in the original messages. " +
       "In Discord, a line starting with '> ' is a quote — the user is quoting something (often from " +
       "another message), not saying it themselves. " +
+      "Distinguish opinions from facts: when a participant shares a subjective reaction, judgment, or " +
+      "characterization, attribute it to them and prefer direct quotes rather than " +
+      "restating their opinion as if it were objective truth. " +
       "Keep the summary under 3500 characters.",
     messages: [{ role: "user", content: `Summarize the following chat log:\n\n${transcript}` }],
   });
