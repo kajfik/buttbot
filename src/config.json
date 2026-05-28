@@ -9,7 +9,7 @@
         "cooldownMs": 18000000,
         "cooldownMessages": 100,
         "messageLimit": 100,
-        "windowMs": 43200000,
+        "windowMs": 86400000,
         "maxMessages": 2000,
         "model": "claude-sonnet-4-6"
       }
