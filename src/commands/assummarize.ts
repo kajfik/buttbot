@@ -164,14 +164,19 @@ const callClaude = async(transcript: string): Promise<string> => {
       "inside ||...|| in the original messages. " +
       "In Discord, a line starting with '> ' is a quote — the user is quoting something (often from " +
       "another message), not saying it themselves. " +
-      "Each message in the log is prefixed with a bracketed number like [12]. When you state a specific " +
-      "claim, question, opinion, or conclusion, cite the message(s) it came from by appending the matching " +
-      "bracketed number(s) immediately after it, e.g. \"...they shipped the fix [12].\" or \"[12][15]\" for " +
-      "several. Only ever use numbers that appear in the log, and don't over-cite — attach the marker to " +
-      "the key supporting message rather than to every line. " +
+      "Each message in the log is prefixed with a bracketed number like [12]. Each citation becomes a link " +
+      "in the final post, so cite SPARINGLY: add a citation only to the single most important, surprising, " +
+      "or load-bearing claim in a given topic or paragraph — not to every sentence, quote, or opinion. " +
+      "Most sentences should have NO citation. Aim for at most one citation per topic, and never more than " +
+      "one citation per two or three sentences. When you do cite, append the matching bracketed number " +
+      "immediately after the claim, e.g. \"...they shipped the fix [12].\" Use a single number per citation " +
+      "rather than stacking several. Only ever use numbers that appear in the log. " +
       "Distinguish opinions from facts: when a participant shares a subjective reaction, judgment, or " +
       "characterization, attribute it to them and prefer direct quotes rather than " +
       "restating their opinion as if it were objective truth. " +
+      "Some messages are jokes, sarcasm, hyperbole, memes, or bits. Do NOT restate an obvious joke or " +
+      "absurd exaggeration as if it were a serious, literal claim someone made. When unsure whether something is serious, " +
+      "quote it directly instead of paraphrasing it into a factual assertion. " +
       "Keep the summary under 3500 characters.",
     messages: [{ role: "user", content: `Summarize the following chat log:\n\n${transcript}` }],
   });
