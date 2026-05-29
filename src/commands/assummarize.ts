@@ -81,7 +81,10 @@ const collectMessages = async(channel: TextBasedChannel, anchorId: string | null
 
 const REPLY_QUOTE_MAX = 80;
 
-const buildTranscript = async(messages: Message[]): Promise<{ transcript: string; sentCount: number }> => {
+// Builds the chat log sent to the AI. Each included line is prefixed with a
+// 1-based index like `[12]`; `refs[index - 1]` is the source message id so the
+// AI can cite a line and we can later turn that citation into a jump link.
+const buildTranscript = async(messages: Message[]): Promise<{ transcript: string; sentCount: number; refs: string[] }> => {
   const optInRows = await tags.summarizeOptIn.findAll();
   const optIn = new Set<string>(optInRows.map(r => r.userID));
   const nickRows = await tags.summarizeNick.findAll();
@@ -89,6 +92,7 @@ const buildTranscript = async(messages: Message[]): Promise<{ transcript: string
   const byId = new Map<string, Message>(messages.map(m => [m.id, m]));
   const chronological = [...messages].reverse();
   const lines: string[] = [];
+  const refs: string[] = [];
   let sentCount = 0;
   for (const m of chronological) {
     if (m.author.bot) continue;
@@ -113,11 +117,24 @@ const buildTranscript = async(messages: Message[]): Promise<{ transcript: string
       }
     }
 
-    lines.push(`${name}${replyAnnotation}: ${content}`);
+    const idx = sentCount + 1;
+    lines.push(`[${idx}] ${name}${replyAnnotation}: ${content}`);
+    refs.push(m.id);
     sentCount++;
   }
-  return { transcript: lines.join("\n"), sentCount };
+  return { transcript: lines.join("\n"), sentCount, refs };
 };
+
+// Replace every `[N]` citation marker the AI emitted with a Discord jump link to
+// the matching source message. Markers whose number is out of range (the model
+// invented or miscounted one) are dropped so we never post a broken link.
+const CITATION_RE = /\s*\[(\d+)\]/g;
+const linkifyCitations = (text: string, refs: string[], linkBase: string): string =>
+  text.replace(CITATION_RE, (_whole, num: string) => {
+    const idx = Number(num);
+    if (idx >= 1 && idx <= refs.length) return ` [↗](${linkBase}/${refs[idx - 1]})`;
+    return "";
+  });
 
 const formatDuration = (ms: number): string => {
   const totalMinutes = Math.max(1, Math.round(ms / 60000));
@@ -147,6 +164,11 @@ const callClaude = async(transcript: string): Promise<string> => {
       "inside ||...|| in the original messages. " +
       "In Discord, a line starting with '> ' is a quote — the user is quoting something (often from " +
       "another message), not saying it themselves. " +
+      "Each message in the log is prefixed with a bracketed number like [12]. When you state a specific " +
+      "claim, question, opinion, or conclusion, cite the message(s) it came from by appending the matching " +
+      "bracketed number(s) immediately after it, e.g. \"...they shipped the fix [12].\" or \"[12][15]\" for " +
+      "several. Only ever use numbers that appear in the log, and don't over-cite — attach the marker to " +
+      "the key supporting message rather than to every line. " +
       "Distinguish opinions from facts: when a participant shares a subjective reaction, judgment, or " +
       "characterization, attribute it to them and prefer direct quotes rather than " +
       "restating their opinion as if it were objective truth. " +
@@ -161,7 +183,9 @@ const callClaude = async(transcript: string): Promise<string> => {
     .trim();
 
   if (!text) throw new Error("Claude returned no text content.");
-  return text.length > EMBED_DESCRIPTION_LIMIT ? `${text.slice(0, EMBED_DESCRIPTION_LIMIT - 1)}…` : text;
+  // Don't truncate here: citation markers still need to be expanded into (much
+  // longer) jump links, so the final length cap is enforced after linkifying.
+  return text;
 };
 
 export const assummarize: Command = {
@@ -239,7 +263,7 @@ export const assummarize: Command = {
       return;
     }
 
-    const { transcript, sentCount } = await buildTranscript(collected);
+    const { transcript, sentCount, refs } = await buildTranscript(collected);
     if (!transcript) {
       await interaction.editReply({ content: "There's nothing recent to summarize." });
       return;
@@ -258,9 +282,15 @@ export const assummarize: Command = {
     const oldestTs = collected[collected.length - 1].createdTimestamp;
     const periodLabel = formatDuration(newestTs - oldestTs);
 
-    const description = state.lastSummaryMessageLink
-      ? `Previous summary: [Jump to message](${state.lastSummaryMessageLink})\n\n${summary}`
-      : summary;
+    const linkBase = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}`;
+    const cited = linkifyCitations(summary, refs, linkBase);
+
+    const descriptionFull = state.lastSummaryMessageLink
+      ? `Previous summary: [Jump to message](${state.lastSummaryMessageLink})\n\n${cited}`
+      : cited;
+    const description = descriptionFull.length > EMBED_DESCRIPTION_LIMIT
+      ? `${descriptionFull.slice(0, EMBED_DESCRIPTION_LIMIT - 1)}…`
+      : descriptionFull;
 
     const embed = new EmbedBuilder()
       .setColor(Colors.DarkAqua)
