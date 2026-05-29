@@ -84,7 +84,15 @@ const REPLY_QUOTE_MAX = 80;
 // Builds the chat log sent to the AI. Each included line is prefixed with a
 // 1-based index like `[12]`; `refs[index - 1]` is the source message id so the
 // AI can cite a line and we can later turn that citation into a jump link.
+//
+// PRIVACY: this is the only place message content is gathered for Claude, and it
+// is the gate that enforces opt-in. Only messages authored by users who have
+// explicitly opted in (via /assummary optin) are ever placed in the transcript;
+// everyone else's messages are skipped entirely, so their content never leaves
+// Discord or reaches the AI.
 const buildTranscript = async(messages: Message[]): Promise<{ transcript: string; sentCount: number; refs: string[] }> => {
+  // The set of user IDs that have opted in to summarization. Membership in this
+  // set is the sole condition for a message's content being sent to Claude.
   const optInRows = await tags.summarizeOptIn.findAll();
   const optIn = new Set<string>(optInRows.map(r => r.userID));
   const nickRows = await tags.summarizeNick.findAll();
@@ -96,6 +104,8 @@ const buildTranscript = async(messages: Message[]): Promise<{ transcript: string
   let sentCount = 0;
   for (const m of chronological) {
     if (m.author.bot) continue;
+    // Opt-in gate: skip any message whose author has NOT opted in, so its
+    // content is never added to the transcript and thus never sent to Claude.
     if (!optIn.has(m.author.id)) continue;
     const content = m.content?.trim();
     if (!content) continue;
@@ -107,6 +117,9 @@ const buildTranscript = async(messages: Message[]): Promise<{ transcript: string
       const ref = byId.get(refId);
       if (ref && !ref.author.bot) {
         const refName = nicks.get(ref.author.id) ?? ref.member?.displayName ?? ref.author.username;
+        // Same opt-in gate for quoted replies: we only include the quoted text
+        // when the replied-to author has also opted in. Otherwise we mention
+        // only that it was a reply, never that user's actual message content.
         if (optIn.has(ref.author.id) && ref.content?.trim()) {
           const quote = ref.content.trim();
           const truncated = quote.length > REPLY_QUOTE_MAX ? `${quote.slice(0, REPLY_QUOTE_MAX)}…` : quote;
@@ -165,12 +178,14 @@ const callClaude = async(transcript: string): Promise<string> => {
       "In Discord, a line starting with '> ' is a quote — the user is quoting something (often from " +
       "another message), not saying it themselves. " +
       "Each message in the log is prefixed with a bracketed number like [12]. Each citation becomes a link " +
-      "in the final post, so cite SPARINGLY: add a citation only to the single most important, surprising, " +
-      "or load-bearing claim in a given topic or paragraph — not to every sentence, quote, or opinion. " +
-      "Most sentences should have NO citation. Aim for at most one citation per topic, and never more than " +
-      "one citation per two or three sentences. When you do cite, append the matching bracketed number " +
-      "immediately after the claim, e.g. \"...they shipped the fix [12].\" Use a single number per citation " +
-      "rather than stacking several. Only ever use numbers that appear in the log. " +
+      "in the final post. Give each paragraph EXACTLY ONE citation: cite the message that carries the " +
+      "paragraph's main point or the message that started that discussion, and place the citation in the " +
+      "first sentence of the paragraph whenever possible. Do not add more than one citation to a paragraph, " +
+      "and do not leave a paragraph without a citation. The one exception is a 'Misc' (or similar catch-all) " +
+      "paragraph that bundles several unrelated topics: there, give EACH bullet point or topic its own single " +
+      "citation. When you cite, append the matching bracketed number immediately after the claim, e.g. " +
+      "\"...they shipped the fix [12].\" Use a single number per citation rather than stacking several. " +
+      "Only ever use numbers that appear in the log. " +
       "Distinguish opinions from facts: when a participant shares a subjective reaction, judgment, or " +
       "characterization, attribute it to them and prefer direct quotes rather than " +
       "restating their opinion as if it were objective truth. " +
