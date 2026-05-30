@@ -1,10 +1,16 @@
 import {
   ApplicationCommandOptionType, ApplicationCommandType, ChatInputCommandInteraction,
-  MessageFlags, TextBasedChannel
+  Colors, EmbedBuilder, Message, MessageFlags, TextBasedChannel
 } from "discord.js";
 import { Command } from "../command";
 import { ids } from "../config.json";
 import { tags } from "../bot";
+import {
+  EMBED_DESCRIPTION_LIMIT, buildTranscript, callClaude, collectRecentMessages,
+  formatDuration, linkifyCitations
+} from "./assummarize";
+
+const TEST_MESSAGE_LIMIT = 200;
 
 const SUMMARIZE_CFG = ids.AD.summarize;
 
@@ -78,6 +84,11 @@ export const assummary: Command = {
       name: "deletenick",
       description: "Remove your custom summary nickname.",
       type: ApplicationCommandOptionType.Subcommand
+    },
+    {
+      name: "test",
+      description: "Show an ephemeral summary of the last 200 messages (no cooldown).",
+      type: ApplicationCommandOptionType.Subcommand
     }
   ],
   run: async(interaction: ChatInputCommandInteraction) => {
@@ -91,6 +102,76 @@ export const assummary: Command = {
     }
 
     const subcommand = interaction.options.getSubcommand();
+
+    if (subcommand === "test") {
+      // Owner-only debug command: runs a one-off /assummarize over the last
+      // TEST_MESSAGE_LIMIT messages and shows it only to the caller. It ignores
+      // the channel restriction, the cooldowns, and the summary anchor, and
+      // never persists state, so it's safe to spam while iterating on prompts.
+      if (interaction.user.id !== ids.kajfik) {
+        await interaction.reply({ content: "This command isn't available to you.", flags: MessageFlags.Ephemeral });
+        return;
+      }
+
+      const channel = interaction.channel;
+      if (!channel || !channel.isTextBased()) {
+        await interaction.reply({ content: "I can't read messages in this channel.", flags: MessageFlags.Ephemeral });
+        return;
+      }
+
+      if (!process.env.ANTHROPIC_API_KEY) {
+        await interaction.reply({ content: "AI summarization isn't configured (missing API key). Tell an admin.", flags: MessageFlags.Ephemeral });
+        return;
+      }
+
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+      let collected: Message[];
+      try {
+        collected = await collectRecentMessages(channel, TEST_MESSAGE_LIMIT);
+      } catch (err) {
+        console.error("assummary test: failed to fetch messages:", err);
+        await interaction.editReply({ content: "Couldn't fetch messages to summarize." });
+        return;
+      }
+
+      const { transcript, sentCount, refs } = await buildTranscript(collected);
+      if (!transcript) {
+        await interaction.editReply({ content: "There's nothing recent to summarize." });
+        return;
+      }
+
+      let summary: string;
+      try {
+        summary = await callClaude(transcript);
+      } catch (err) {
+        console.error("assummary test: Claude call failed:", err);
+        await interaction.editReply({ content: "Summarization failed. Try again later." });
+        return;
+      }
+
+      const newestTs = collected[0].createdTimestamp;
+      const oldestTs = collected[collected.length - 1].createdTimestamp;
+      const periodLabel = formatDuration(newestTs - oldestTs);
+
+      const linkBase = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}`;
+      const cited = linkifyCitations(summary, refs, linkBase);
+      const description = cited.length > EMBED_DESCRIPTION_LIMIT
+        ? `${cited.slice(0, EMBED_DESCRIPTION_LIMIT - 1)}…`
+        : cited;
+
+      const embed = new EmbedBuilder()
+        .setColor(Colors.DarkAqua)
+        .setTitle(`Channel summary (test, last ${periodLabel}, ${sentCount}/${collected.length} messages sent to AI)`)
+        .setDescription(description)
+        .setFooter({
+          text: `Requested by ${interaction.user.username} • model: ${SUMMARIZE_CFG.model} • test command`,
+        })
+        .setTimestamp();
+
+      await interaction.editReply({ embeds: [embed] });
+      return;
+    }
 
     if (subcommand === "latest") {
       const key = stateKey(guildId, interaction.channelId);

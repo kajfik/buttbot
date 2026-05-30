@@ -8,7 +8,7 @@ import { ids } from "../config.json";
 import { tags } from "../bot";
 
 const SUMMARIZE_CFG = ids.AD.summarize;
-const EMBED_DESCRIPTION_LIMIT = 3900;
+export const EMBED_DESCRIPTION_LIMIT = 3900;
 const FETCH_PAGE_SIZE = 100;
 
 const stateKey = (guildId: string, channelId: string) => `${guildId}:${channelId}`;
@@ -79,6 +79,29 @@ const collectMessages = async(channel: TextBasedChannel, anchorId: string | null
   return collected;
 };
 
+// Fetch up to `limit` of the most recent messages in a channel, newest-first,
+// paginating in pages of FETCH_PAGE_SIZE. Unlike collectMessages, this ignores
+// the summary anchor and the count/time-window floors entirely — it just grabs
+// the latest N messages. Used by the /assummary test command.
+export const collectRecentMessages = async(channel: TextBasedChannel, limit: number): Promise<Message[]> => {
+  const collected: Message[] = [];
+  let beforeId: string | undefined = undefined;
+
+  while (collected.length < limit) {
+    const page: Collection<string, Message> = await channel.messages.fetch({
+      limit: Math.min(FETCH_PAGE_SIZE, limit - collected.length),
+      ...(beforeId ? { before: beforeId } : {}),
+    });
+    if (page.size === 0) break;
+
+    const pageArr: Message[] = Array.from(page.values());
+    collected.push(...pageArr);
+    beforeId = pageArr[pageArr.length - 1].id;
+  }
+
+  return collected;
+};
+
 const REPLY_QUOTE_MAX = 80;
 
 // Builds the chat log sent to the AI. Each included line is prefixed with a
@@ -90,7 +113,7 @@ const REPLY_QUOTE_MAX = 80;
 // explicitly opted in (via /assummary optin) are ever placed in the transcript;
 // everyone else's messages are skipped entirely, so their content never leaves
 // Discord or reaches the AI.
-const buildTranscript = async(messages: Message[]): Promise<{ transcript: string; sentCount: number; refs: string[] }> => {
+export const buildTranscript = async(messages: Message[]): Promise<{ transcript: string; sentCount: number; refs: string[] }> => {
   // The set of user IDs that have opted in to summarization. Membership in this
   // set is the sole condition for a message's content being sent to Claude.
   const optInRows = await tags.summarizeOptIn.findAll();
@@ -142,14 +165,14 @@ const buildTranscript = async(messages: Message[]): Promise<{ transcript: string
 // the matching source message. Markers whose number is out of range (the model
 // invented or miscounted one) are dropped so we never post a broken link.
 const CITATION_RE = /\s*\[(\d+)\]/g;
-const linkifyCitations = (text: string, refs: string[], linkBase: string): string =>
+export const linkifyCitations = (text: string, refs: string[], linkBase: string): string =>
   text.replace(CITATION_RE, (_whole, num: string) => {
     const idx = Number(num);
     if (idx >= 1 && idx <= refs.length) return ` [↗](${linkBase}/${refs[idx - 1]})`;
     return "";
   });
 
-const formatDuration = (ms: number): string => {
+export const formatDuration = (ms: number): string => {
   const totalMinutes = Math.max(1, Math.round(ms / 60000));
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
@@ -158,7 +181,7 @@ const formatDuration = (ms: number): string => {
   return `${minutes}m`;
 };
 
-const callClaude = async(transcript: string): Promise<string> => {
+export const callClaude = async(transcript: string): Promise<string> => {
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const result = await anthropic.messages.create({
     model: SUMMARIZE_CFG.model,
@@ -173,8 +196,8 @@ const callClaude = async(transcript: string): Promise<string> => {
       "Produce a concise summary of the main topics, questions, and conclusions. " +
       "A light, playful tone is welcome — feel free to be a little humorous where it fits naturally, " +
       "but don't force jokes, mock participants, or sacrifice accuracy for the sake of a punchline. " +
-      "Organize the summary into sections, each with a short title. Each section body can be either a short " +
-      "paragraph of text or bullet points. Do not invent details. " +
+      //"Organize the summary into sections, each with a short title. Each section body can be either a short " +
+      //"paragraph of text or bullet points. Do not invent details. " +
       "Refer to participants by their display names when relevant. " +
       "The chat log may be incomplete — some messages are omitted, so replies can point to text you can't " +
       "see and you may only have one side of a conversation. Don't guess at missing content or assume a " +
@@ -183,21 +206,18 @@ const callClaude = async(transcript: string): Promise<string> => {
       "inside ||...|| in the original messages. " +
       "In Discord, a line starting with '> ' is a quote — the user is quoting something (often from " +
       "another message), not saying it themselves. " +
-      "Each message in the log is prefixed with a bracketed number like [12]. Each citation becomes a link " +
-      "in the final post. Give each section " +
-      "EXACTLY ONE citation, placed in the section title: cite the message that carries the section's main " +
-      "point or the message that started that discussion. Do not add citations anywhere else in the section " +
-      "body, and do not leave a section title without a citation. The one exception is a 'Misc' (or similar " +
-      "catch-all) section that bundles several unrelated topics: it does not have to have any citation. " +
-      "When you cite, append the matching bracketed " +
-      "number to the title, e.g. \"Database migration [12]\". Use a single number per citation rather than " +
-      "stacking several. Only ever use numbers that appear in the log. " +
-      "Distinguish opinions from facts: when a participant shares a subjective reaction, judgment, or " +
-      "characterization, attribute it to them and prefer direct quotes rather than " +
-      "restating their opinion as if it were objective truth. " +
-      "Some messages are jokes, sarcasm, hyperbole, memes, or bits. Do NOT restate an obvious joke or " +
-      "absurd exaggeration as if it were a serious, literal claim someone made. When unsure whether something is serious, " +
-      "quote it directly instead of paraphrasing it into a factual assertion. " +
+      //"Each message in the log is prefixed with a bracketed number like [12]. Each citation becomes a link " +
+      //"in the final post. Give each section " +
+      //"EXACTLY ONE citation, placed in the section title: " +
+      //"When you cite, append the matching bracketed " +
+      //"number to the title, e.g. \"Database migration [12]\". Use a single number per citation rather than " +
+      //"stacking several. Only ever use numbers that appear in the log. " +
+      //"Distinguish opinions from facts: when a participant shares a subjective reaction, judgment, or " +
+      //"characterization, attribute it to them and prefer direct quotes rather than " +
+      //"restating their opinion as if it were objective truth. " +
+      //"Some messages are jokes, sarcasm, hyperbole, memes, or bits. Do NOT restate an obvious joke or " +
+      //"absurd exaggeration as if it were a serious, literal claim someone made. When unsure whether something is serious, " +
+      //"quote it directly instead of paraphrasing it into a factual assertion. " +
       "Output only the summary itself: no preamble (e.g. \"Here's a summary...\") and no closing remarks or sign-off. " +
       "Keep the summary under 3500 characters.",
     }],
