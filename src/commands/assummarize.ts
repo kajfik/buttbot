@@ -205,8 +205,9 @@ export const callClaude = async(transcript: string): Promise<string> => {
 
       "# Task\n" +
       "Write a concise summary of the main topics, questions, and conclusions. Organize it " +
-      "into sections, each with a bold '**…**'. If you add a miscellaneous/catch-all section " +
-      "for loose ends, format it as bullet points.\n\n" +
+      "into sections, each with a bold '**…**' title. If you add a miscellaneous/catch-all " +
+      "section for loose ends, give it a bold title like the others " +
+      "and format its contents as bullet points.\n\n" +
 
       "# Accuracy\n" +
       "- Summarize only what's present; never invent or guess at missing content.\n" +
