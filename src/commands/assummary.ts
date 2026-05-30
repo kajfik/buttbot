@@ -1,11 +1,43 @@
 import {
-  ApplicationCommandOptionType, ApplicationCommandType, ChatInputCommandInteraction, MessageFlags
+  ApplicationCommandOptionType, ApplicationCommandType, ChatInputCommandInteraction,
+  MessageFlags, TextBasedChannel
 } from "discord.js";
 import { Command } from "../command";
 import { ids } from "../config.json";
 import { tags } from "../bot";
 
+const SUMMARIZE_CFG = ids.AD.summarize;
+
 const stateKey = (guildId: string, channelId: string) => `${guildId}:${channelId}`;
+
+// Count messages posted after the last summarized message, capped at the
+// cooldown threshold (mirrors the check in assummarize.ts).
+const countNewMessagesSince = async(channel: TextBasedChannel, anchorId: string): Promise<number> => {
+  const fetched = await channel.messages.fetch({ after: anchorId, limit: SUMMARIZE_CFG.cooldownMessages });
+  return fetched.size;
+};
+
+// Build a line describing when /assummarize can next be run in this channel.
+// /assummarize requires BOTH the time cooldown to elapse AND enough new
+// messages since the last summary, so we surface whichever is still blocking.
+// `newCount` is null when the message count couldn't be determined (no prior
+// summary anchor, or the channel fetch failed), in which case it's omitted.
+const nextAvailableLine = (lastSummaryAt: number, newCount: number | null): string => {
+  const reasons: string[] = [];
+
+  const unlocksAt = lastSummaryAt + SUMMARIZE_CFG.cooldownMs;
+  if (lastSummaryAt > 0 && Date.now() < unlocksAt) {
+    reasons.push(`off time cooldown <t:${Math.floor(unlocksAt / 1000)}:R>`);
+  }
+
+  if (newCount !== null && newCount < SUMMARIZE_CFG.cooldownMessages) {
+    const needed = SUMMARIZE_CFG.cooldownMessages - newCount;
+    reasons.push(`${needed} more new message${needed === 1 ? "" : "s"} (${newCount}/${SUMMARIZE_CFG.cooldownMessages}) are posted`);
+  }
+
+  if (reasons.length === 0) return "\n/assummarize is available now.";
+  return `\n/assummarize will be available once ${reasons.join(" and ")}.`;
+};
 
 export const assummary: Command = {
   name: "assummary",
@@ -63,14 +95,25 @@ export const assummary: Command = {
     if (subcommand === "latest") {
       const key = stateKey(guildId, interaction.channelId);
       const [state] = await tags.summarizeState.findOrCreate({ where: { key } });
+
+      let newCount: number | null = null;
+      if (state.lastSummarizedMessageId && interaction.channel?.isTextBased()) {
+        try {
+          newCount = await countNewMessagesSince(interaction.channel, state.lastSummarizedMessageId);
+        } catch (err) {
+          console.error("assummary latest: failed to count new messages:", err);
+        }
+      }
+
+      const availability = nextAvailableLine(Number(state.lastSummaryAt) || 0, newCount);
       if (state.lastSummaryMessageLink) {
         await interaction.reply({
-          content: `Latest summary: ${state.lastSummaryMessageLink}`,
+          content: `Latest summary: ${state.lastSummaryMessageLink}${availability}`,
           flags: MessageFlags.Ephemeral,
         });
       } else {
         await interaction.reply({
-          content: "No summary has been generated in this channel yet.",
+          content: `No summary has been generated in this channel yet.${availability}`,
           flags: MessageFlags.Ephemeral,
         });
       }
