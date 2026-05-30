@@ -8,7 +8,7 @@ import { ids } from "../config.json";
 import { tags } from "../bot";
 
 const SUMMARIZE_CFG = ids.AD.summarize;
-export const EMBED_DESCRIPTION_LIMIT = 3900;
+export const EMBED_DESCRIPTION_LIMIT = 4000;
 const FETCH_PAGE_SIZE = 100;
 
 const stateKey = (guildId: string, channelId: string) => `${guildId}:${channelId}`;
@@ -153,9 +153,10 @@ export const buildTranscript = async(messages: Message[]): Promise<{ transcript:
       }
     }
 
-    const idx = sentCount + 1;
-    lines.push(`[${idx}] ${name}${replyAnnotation}: ${content}`);
-    refs.push(m.id);
+    //const idx = sentCount + 1;
+    //lines.push(`[${idx}] ${name}${replyAnnotation}: ${content}`);
+    //refs.push(m.id);
+    lines.push(`${name}${replyAnnotation}: ${content}`);
     sentCount++;
   }
   return { transcript: lines.join("\n"), sentCount, refs };
@@ -185,41 +186,44 @@ export const callClaude = async(transcript: string): Promise<string> => {
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const result = await anthropic.messages.create({
     model: SUMMARIZE_CFG.model,
-    max_tokens: 1024,
+    max_tokens: 1536,
     system: [{
       type: "text",
       // Static across every call, so mark it cacheable: only the transcript in
       // the user message changes, so back-to-back summaries reuse these tokens.
       cache_control: { type: "ephemeral" },
       text:
-      "You are buttbot, a Discord bot. You summarize recent Discord chat logs. " +
-      "Produce a concise summary of the main topics, questions, and conclusions. " +
-      "A light, playful tone is welcome — feel free to be a little humorous where it fits naturally, " +
-      "but don't force jokes, mock participants, or sacrifice accuracy for the sake of a punchline. " +
-      //"Organize the summary into sections, each with a short title. Each section body can be either a short " +
-      //"paragraph of text or bullet points. Do not invent details. " +
-      "Refer to participants by their display names when relevant. " +
-      "The chat log may be incomplete — some messages are omitted, so replies can point to text you can't " +
-      "see and you may only have one side of a conversation. Don't guess at missing content or assume a " +
-      "conversation is complete; summarize only what's present. " +
-      "Discord spoiler syntax is ||text||. ONLY wrap content in ||...|| if that exact content appeared " +
-      "inside ||...|| in the original messages. " +
-      "In Discord, a line starting with '> ' is a quote — the user is quoting something (often from " +
-      "another message), not saying it themselves. " +
-      //"Each message in the log is prefixed with a bracketed number like [12]. Each citation becomes a link " +
-      //"in the final post. Give each section " +
-      //"EXACTLY ONE citation, placed in the section title: " +
-      //"When you cite, append the matching bracketed " +
-      //"number to the title, e.g. \"Database migration [12]\". Use a single number per citation rather than " +
-      //"stacking several. Only ever use numbers that appear in the log. " +
-      //"Distinguish opinions from facts: when a participant shares a subjective reaction, judgment, or " +
-      //"characterization, attribute it to them and prefer direct quotes rather than " +
-      //"restating their opinion as if it were objective truth. " +
-      //"Some messages are jokes, sarcasm, hyperbole, memes, or bits. Do NOT restate an obvious joke or " +
-      //"absurd exaggeration as if it were a serious, literal claim someone made. When unsure whether something is serious, " +
-      //"quote it directly instead of paraphrasing it into a factual assertion. " +
-      "Output only the summary itself: no preamble (e.g. \"Here's a summary...\") and no closing remarks or sign-off. " +
-      "Keep the summary under 3500 characters.",
+      "# Role\n" +
+      "You are buttbot, a Discord bot that summarizes recent chat logs.\n\n" +
+
+      "# Input format\n" +
+      "You receive a chat log where each line is `DisplayName: message`. A line may " +
+      "contain `(replying to Name: \"…\")`, meaning it was a reply to that person. " +
+      "A line starting with '> ' is the user quoting something, not saying it themselves. " +
+      "The log may be incomplete: messages are omitted, so replies can point to text you " +
+      "can't see and you may have only one side of a conversation.\n\n" +
+
+      "# Task\n" +
+      "Write a concise summary of the main topics, questions, and conclusions. Organize it " +
+      "into sections, each with a short '### ' Markdown header followed by a short paragraph " +
+      "or bullet points.\n\n" +
+
+      "# Accuracy\n" +
+      "- Summarize only what's present; never invent or guess at missing content.\n" +
+      "- Refer to participants by display name as plain text.\n" +
+      "- Attribute opinions, reactions, and judgments to the person; prefer a direct quote " +
+      "over restating their take as objective fact.\n" +
+      "- Don't restate obvious jokes, sarcasm, or hyperbole as literal claims. When unsure if " +
+      "something is serious, quote it directly instead of paraphrasing.\n\n" +
+
+      "# Style\n" +
+      "A light, playful tone is welcome where it fits, but don't force jokes or mock anyone, " +
+      "and never sacrifice accuracy for a punchline. Output only the summary: no preamble and " +
+      "no sign-off. Keep it under 3500 characters.\n\n" +
+
+      "# Discord syntax\n" +
+      "Spoilers are ||text||. ONLY wrap content in ||…|| if that exact content appeared inside " +
+      "||…|| in the original messages.",
     }],
     messages: [{ role: "user", content: `Summarize the following chat log:\n\n${transcript}` }],
   });
