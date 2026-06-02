@@ -218,7 +218,7 @@ export const callClaude = async(transcript: string): Promise<string> => {
       "something is serious, quote it directly instead of paraphrasing.\n\n" +
 
       "# Style\n" +
-      "A light, playful tone is welcome — feel free to be a little humorous where it fits " +
+      "A light, playful tone is welcome — be a little humorous/punny where it fits " +
       "naturally, but don't force jokes or mock anyone, and never sacrifice accuracy for a " +
       "punchline. Output only the summary: no preamble and no sign-off. Keep it under 3500 characters.\n\n" +
 
