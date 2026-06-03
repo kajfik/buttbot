@@ -120,10 +120,16 @@ export const buildTranscript = async(messages: Message[]): Promise<{ transcript:
   const optIn = new Set<string>(optInRows.map(r => r.userID));
   const nickRows = await tags.summarizeNick.findAll();
   const nicks = new Map<string, string>(nickRows.map(r => [r.userID, r.nick]));
+  const pronounRows = await tags.summarizePronoun.findAll();
+  const pronouns = new Map<string, string>(pronounRows.map(r => [r.userID, r.pronoun]));
   const byId = new Map<string, Message>(messages.map(m => [m.id, m]));
   const chronological = [...messages].reverse();
   const lines: string[] = [];
   const refs: string[] = [];
+  // Display name -> pronouns, for participants who actually appear in the
+  // transcript and have saved pronouns. Surfaced as a preamble so the AI
+  // refers to people correctly instead of guessing their gender.
+  const pronounGuide = new Map<string, string>();
   let sentCount = 0;
   for (const m of chronological) {
     if (m.author.bot) continue;
@@ -133,6 +139,8 @@ export const buildTranscript = async(messages: Message[]): Promise<{ transcript:
     const content = m.content?.trim();
     if (!content) continue;
     const name = nicks.get(m.author.id) ?? m.member?.displayName ?? m.author.username;
+    const pronoun = pronouns.get(m.author.id);
+    if (pronoun) pronounGuide.set(name, pronoun);
 
     let replyAnnotation = "";
     const refId = m.reference?.messageId;
@@ -159,7 +167,13 @@ export const buildTranscript = async(messages: Message[]): Promise<{ transcript:
     lines.push(`${name}${replyAnnotation}: ${content}`);
     sentCount++;
   }
-  return { transcript: lines.join("\n"), sentCount, refs };
+
+  let transcript = lines.join("\n");
+  if (pronounGuide.size > 0) {
+    const guideLines = Array.from(pronounGuide, ([name, pronoun]) => `- ${name}: ${pronoun}`);
+    transcript = `Pronouns to use for these participants:\n${guideLines.join("\n")}\n\n${transcript}`;
+  }
+  return { transcript, sentCount, refs };
 };
 
 // Replace every `[N]` citation marker the AI emitted with a Discord jump link to
@@ -201,7 +215,9 @@ export const callClaude = async(transcript: string): Promise<string> => {
       "contain `(replying to Name: \"…\")`, meaning it was a reply to that person. " +
       "A line starting with '> ' is the user quoting something, not saying it themselves. " +
       "The log may be incomplete: messages are omitted, so replies can point to text you " +
-      "can't see and you may have only one side of a conversation.\n\n" +
+      "can't see and you may have only one side of a conversation. " +
+      "The log may be preceded by a `Pronouns to use for these participants:` list; " +
+      "when you refer to one of those people with a pronoun, use the pronouns listed for them.\n\n" +
 
       "# Task\n" +
       "Write a concise summary of the main topics, questions, and conclusions. Organize it " +
@@ -212,6 +228,8 @@ export const callClaude = async(transcript: string): Promise<string> => {
       "# Accuracy\n" +
       "- Summarize only what's present; never invent or guess at missing content.\n" +
       "- Refer to participants by display name as plain text.\n" +
+      "- For anyone without listed pronouns, don't guess their gender: use their display " +
+      "name or singular 'they' rather than assuming 'he' or 'she'.\n" +
       "- Attribute opinions, reactions, and judgments to the person; prefer a direct quote " +
       "over restating their take as objective fact.\n" +
       "- Don't restate obvious jokes, sarcasm, or hyperbole as literal claims. When unsure if " +

@@ -86,6 +86,26 @@ export const assummary: Command = {
       type: ApplicationCommandOptionType.Subcommand
     },
     {
+      name: "setpronoun",
+      description: "Set the pronouns buttbot should use for you in summaries.",
+      type: ApplicationCommandOptionType.Subcommand,
+      options: [
+        {
+          name: "pronoun",
+          description: "Your pronouns, e.g. \"she/her\", \"they/them\".",
+          type: ApplicationCommandOptionType.String,
+          required: true,
+          minLength: 1,
+          maxLength: 32
+        }
+      ]
+    },
+    {
+      name: "deletepronoun",
+      description: "Remove your saved pronouns.",
+      type: ApplicationCommandOptionType.Subcommand
+    },
+    {
       name: "test",
       description: "Show an ephemeral summary of the last 200 messages (no cooldown).",
       type: ApplicationCommandOptionType.Subcommand
@@ -230,6 +250,41 @@ export const assummary: Command = {
       } else {
         await interaction.reply({
           content: "You don't have a custom summary nickname set.",
+          flags: MessageFlags.Ephemeral,
+        });
+      }
+      return;
+    }
+
+    if (subcommand === "setpronoun") {
+      const rawPronoun = interaction.options.getString("pronoun", true);
+      const pronoun = rawPronoun.replace(/\s+/g, " ").trim();
+      if (!pronoun) {
+        await interaction.reply({
+          content: "Your pronouns can't be empty.",
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+      await tags.summarizePronoun.upsert({ userID: interaction.user.id, pronoun });
+      await interaction.reply({
+        content: `Your summary pronouns are now "${pronoun}".`,
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
+    if (subcommand === "deletepronoun") {
+      const existing = await tags.summarizePronoun.findOne({ where: { userID: interaction.user.id } });
+      if (existing) {
+        await existing.destroy();
+        await interaction.reply({
+          content: "Your saved pronouns have been removed.",
+          flags: MessageFlags.Ephemeral,
+        });
+      } else {
+        await interaction.reply({
+          content: "You don't have any pronouns saved.",
           flags: MessageFlags.Ephemeral,
         });
       }

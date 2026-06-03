@@ -96,16 +96,30 @@ SummarizeNick.init(
   { sequelize: summarizeNickDatabase, modelName: "SummarizeNick" }
 );
 
+const summarizePronounDatabase = databaseCreator("summarizePronoun");
+export class SummarizePronoun extends Model {
+  declare userID: string;
+  declare pronoun: string;
+}
+SummarizePronoun.init(
+  {
+    userID: { type: DataTypes.STRING, allowNull: false, unique: true },
+    pronoun: { type: DataTypes.STRING, allowNull: false },
+  },
+  { sequelize: summarizePronounDatabase, modelName: "SummarizePronoun" }
+);
+
 export const tags = {
   summarizeState: SummarizeState,
   summarizeOptIn: SummarizeOptIn,
   summarizeNick: SummarizeNick,
+  summarizePronoun: SummarizePronoun,
 };
 
 clientReady(
   client,
-  [summarizeStateDatabase, summarizeOptInDatabase, summarizeNickDatabase],
-  [SummarizeState, SummarizeOptIn, SummarizeNick]
+  [summarizeStateDatabase, summarizeOptInDatabase, summarizeNickDatabase, summarizePronounDatabase],
+  [SummarizeState, SummarizeOptIn, SummarizeNick, SummarizePronoun]
 );
 interactionCreate(client);
 
