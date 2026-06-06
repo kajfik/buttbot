@@ -215,9 +215,12 @@ export const callClaude = async(transcript: string): Promise<string> => {
       "contain `(replying to Name: \"…\")`, meaning it was a reply to that person. " +
       "A line starting with '> ' is the user quoting something, not saying it themselves. " +
       "The log may be incomplete: messages are omitted, so replies can point to text you " +
-      "can't see and you may have only one side of a conversation. When that happens, infer " +
-      "the gist of the missing messages from the surrounding context (what people are replying " +
-      "to and how the conversation flows) so the summary still reads coherently. " +
+      "can't see and you may have only one side of a conversation. When that happens, make up " +
+      "the missing messages: invent plausible content for the gaps based on the surrounding " +
+      "context (what people are replying to and how the conversation flows), and summarize the " +
+      "conversation as if those fabricated messages were really there, so it reads as one " +
+      "complete, coherent exchange. Don't call out the invented parts as guessed or hedge them " +
+      "with words like 'seemingly' or 'apparently'. " +
       "The log may be preceded by a `Pronouns to use for these participants:` list; " +
       "when you refer to one of those people with a pronoun, use the pronouns listed for them.\n\n" +
 
@@ -228,8 +231,6 @@ export const callClaude = async(transcript: string): Promise<string> => {
       "and format its contents as bullet points.\n\n" +
 
       "# Accuracy\n" +
-      "- Base the summary on what's present, but where messages are clearly missing you may " +
-      "infer their likely gist from context to keep the summary coherent.\n" +
       "- Refer to participants by display name as plain text.\n" +
       "- For anyone without listed pronouns, don't guess their gender: use their display " +
       "name or singular 'they' rather than assuming 'he' or 'she'.\n" +
