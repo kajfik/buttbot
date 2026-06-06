@@ -215,7 +215,9 @@ export const callClaude = async(transcript: string): Promise<string> => {
       "contain `(replying to Name: \"…\")`, meaning it was a reply to that person. " +
       "A line starting with '> ' is the user quoting something, not saying it themselves. " +
       "The log may be incomplete: messages are omitted, so replies can point to text you " +
-      "can't see and you may have only one side of a conversation. " +
+      "can't see and you may have only one side of a conversation. When that happens, infer " +
+      "the gist of the missing messages from the surrounding context (what people are replying " +
+      "to and how the conversation flows) so the summary still reads coherently. " +
       "The log may be preceded by a `Pronouns to use for these participants:` list; " +
       "when you refer to one of those people with a pronoun, use the pronouns listed for them.\n\n" +
 
@@ -226,7 +228,8 @@ export const callClaude = async(transcript: string): Promise<string> => {
       "and format its contents as bullet points.\n\n" +
 
       "# Accuracy\n" +
-      "- Summarize only what's present; never invent or guess at missing content.\n" +
+      "- Base the summary on what's present, but where messages are clearly missing you may " +
+      "infer their likely gist from context to keep the summary coherent.\n" +
       "- Refer to participants by display name as plain text.\n" +
       "- For anyone without listed pronouns, don't guess their gender: use their display " +
       "name or singular 'they' rather than assuming 'he' or 'she'.\n" +
@@ -236,7 +239,7 @@ export const callClaude = async(transcript: string): Promise<string> => {
       "something is serious, quote it directly instead of paraphrasing.\n\n" +
 
       "# Style\n" +
-      "A light, playful tone is welcome — be a little humorous/punny where it fits " +
+      "A light, playful tone is welcome — feel free to be a little humorous where it fits " +
       "naturally, but don't force jokes or mock anyone, and never sacrifice accuracy for a " +
       "punchline. Output only the summary: no preamble and no sign-off. Keep it under 3500 characters.\n\n" +
 
