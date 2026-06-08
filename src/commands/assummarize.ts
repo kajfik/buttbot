@@ -215,12 +215,7 @@ export const callClaude = async(transcript: string): Promise<string> => {
       "contain `(replying to Name: \"…\")`, meaning it was a reply to that person. " +
       "A line starting with '> ' is the user quoting something, not saying it themselves. " +
       "The log may be incomplete: messages are omitted, so replies can point to text you " +
-      "can't see and you may have only one side of a conversation. When that happens, make up " +
-      "the missing messages: invent plausible content for the gaps based on the surrounding " +
-      "context (what people are replying to and how the conversation flows), and summarize the " +
-      "conversation as if those fabricated messages were really there, so it reads as one " +
-      "complete, coherent exchange. Don't call out the invented parts as guessed or hedge them " +
-      "with words like 'seemingly' or 'apparently'. " +
+      "can't see and you may have only one side of a conversation. " +
       "The log may be preceded by a `Pronouns to use for these participants:` list; " +
       "when you refer to one of those people with a pronoun, use the pronouns listed for them.\n\n" +
 
