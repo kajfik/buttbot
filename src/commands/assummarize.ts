@@ -147,16 +147,21 @@ export const buildTranscript = async(messages: Message[]): Promise<{ transcript:
     if (refId) {
       const ref = byId.get(refId);
       if (ref && !ref.author.bot) {
-        const refName = nicks.get(ref.author.id) ?? ref.member?.displayName ?? ref.author.username;
-        // Same opt-in gate for quoted replies: we only include the quoted text
-        // when the replied-to author has also opted in. Otherwise we mention
-        // only that it was a reply, never that user's actual message content.
-        if (optIn.has(ref.author.id) && ref.content?.trim()) {
-          const quote = ref.content.trim();
-          const truncated = quote.length > REPLY_QUOTE_MAX ? `${quote.slice(0, REPLY_QUOTE_MAX)}…` : quote;
-          replyAnnotation = ` (replying to ${refName}: "${truncated}")`;
+        // Same opt-in gate for the replied-to author: only when they've opted
+        // in do we send their name (and quoted content) to Claude. For anyone
+        // who hasn't opted in we use a generic placeholder, so neither their
+        // username/nickname nor their message content ever leaves Discord.
+        if (optIn.has(ref.author.id)) {
+          const refName = nicks.get(ref.author.id) ?? ref.member?.displayName ?? ref.author.username;
+          if (ref.content?.trim()) {
+            const quote = ref.content.trim();
+            const truncated = quote.length > REPLY_QUOTE_MAX ? `${quote.slice(0, REPLY_QUOTE_MAX)}…` : quote;
+            replyAnnotation = ` (replying to ${refName}: "${truncated}")`;
+          } else {
+            replyAnnotation = ` (replying to ${refName})`;
+          }
         } else {
-          replyAnnotation = ` (replying to ${refName})`;
+          replyAnnotation = " (replying to someone)";
         }
       }
     }
