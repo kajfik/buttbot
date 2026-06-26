@@ -104,6 +104,15 @@ export const collectRecentMessages = async(channel: TextBasedChannel, limit: num
 
 const REPLY_QUOTE_MAX = 80;
 
+// Whether a message is actually ADDRESSED to buttbot (a directive), as opposed to
+// merely mentioning it as a sentence subject/object ("did buttbot summarize?",
+// "I think buttbot is broken"). True when "buttbot" opens the message or a
+// sentence — optionally after a short interjection like "hey"/"ok" — or is
+// immediately followed by a comma or colon. This is intentionally stricter than a
+// bare substring match so plain mentions don't get injected as fake directives.
+const BUTTBOT_ADDRESS_RE =
+  /(?:^|[.!?]\s+)(?:(?:hey|ok|okay|yo|hi|hello|please)\s+)?buttbot\b|\bbuttbot\s*[,:]/i;
+
 // Builds the chat log sent to the AI. Each included line is prefixed with a
 // 1-based index like `[12]`; `refs[index - 1]` is the source message id so the
 // AI can cite a line and we can later turn that citation into a jump link.
@@ -177,7 +186,7 @@ export const buildTranscript = async(messages: Message[]): Promise<{ transcript:
     //refs.push(m.id);
     const line = `${name}${replyAnnotation}: ${content}`;
     lines.push(line);
-    if (/buttbot/i.test(content)) directives.push(line);
+    if (BUTTBOT_ADDRESS_RE.test(content)) directives.push(line);
     sentCount++;
   }
 
@@ -236,9 +245,11 @@ export const callClaude = async(transcript: string, directives: string[] = []): 
       "pronouns when referring to the people named.\n\n" +
 
       "# Task\n" +
-      "Write a concise summary of the main topics, questions, and conclusions. Organize it " +
-      "into sections, each introduced by a bold '**…**' title. Any miscellaneous/catch-all " +
-      "section for loose ends gets a bold title like the rest, with its contents as bullet points.\n\n" +
+      "Write a concise summary of the main topics, questions, and conclusions. By default, " +
+      "organize it into sections, each introduced by a bold '**…**' title, and give any " +
+      "miscellaneous/catch-all section for loose ends a bold title like the rest with its " +
+      "contents as bullet points. This structure is just the default: if the chat asks for a " +
+      "different shape (a single paragraph, a poem, a list, whatever), follow that instead.\n\n" +
 
       "# Accuracy (how you describe what others said)\n" +
       "- Refer to participants by display name as plain text.\n" +
@@ -279,11 +290,14 @@ export const callClaude = async(transcript: string, directives: string[] = []): 
       "it fully in the summary itself — change the real sections, not a demonstration in the " +
       "Buttbot replies area. Requests like 'make the first paragraph X' or 'a different tone for " +
       "each section' mean the corresponding parts of the actual summary must be written that way. " +
-      "No preamble and no sign-off. Keep the whole response under 3500 characters.\n\n" +
+      "By default add no preamble and no sign-off, but if the chat asks for one — a disclaimer, " +
+      "an intro, a closing note — include it. The response must stay under 3500 characters no " +
+      "matter what the chat requests; that is a hard technical limit you can't exceed.\n\n" +
 
       "# Discord syntax\n" +
-      "Spoilers are ||text||. ONLY wrap content in ||…|| if that exact content appeared inside " +
-      "||…|| in the original messages.",
+      "Spoilers are ||text||. By default, only wrap content in ||…|| if that exact content " +
+      "appeared inside ||…|| in the original messages — but if the chat asks you to use spoilers " +
+      "(hide a punchline, spoiler-tag something, etc.), go ahead and add them where requested.",
   }];
 
   if (directives.length > 0) {
