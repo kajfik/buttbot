@@ -113,7 +113,7 @@ const REPLY_QUOTE_MAX = 80;
 // explicitly opted in (via /assummary optin) are ever placed in the transcript;
 // everyone else's messages are skipped entirely, so their content never leaves
 // Discord or reaches the AI.
-export const buildTranscript = async(messages: Message[]): Promise<{ transcript: string; sentCount: number; refs: string[] }> => {
+export const buildTranscript = async(messages: Message[]): Promise<{ transcript: string; sentCount: number; refs: string[]; directives: string[] }> => {
   // The set of user IDs that have opted in to summarization. Membership in this
   // set is the sole condition for a message's content being sent to Claude.
   const optInRows = await tags.summarizeOptIn.findAll();
@@ -126,6 +126,12 @@ export const buildTranscript = async(messages: Message[]): Promise<{ transcript:
   const chronological = [...messages].reverse();
   const lines: string[] = [];
   const refs: string[] = [];
+  // Lines whose author addressed buttbot directly. These are surfaced separately
+  // so callClaude can promote them into the system prompt (where directives carry
+  // more weight) instead of relying on the model to spot them in the transcript.
+  // They come from this same loop, so they inherit the opt-in gate above: content
+  // from users who haven't opted in is never collected here.
+  const directives: string[] = [];
   // Display name -> pronouns, for participants who actually appear in the
   // transcript and have saved pronouns. Surfaced as a preamble so the AI
   // refers to people correctly instead of guessing their gender.
@@ -169,7 +175,9 @@ export const buildTranscript = async(messages: Message[]): Promise<{ transcript:
     //const idx = sentCount + 1;
     //lines.push(`[${idx}] ${name}${replyAnnotation}: ${content}`);
     //refs.push(m.id);
-    lines.push(`${name}${replyAnnotation}: ${content}`);
+    const line = `${name}${replyAnnotation}: ${content}`;
+    lines.push(line);
+    if (/buttbot/i.test(content)) directives.push(line);
     sentCount++;
   }
 
@@ -178,7 +186,7 @@ export const buildTranscript = async(messages: Message[]): Promise<{ transcript:
     const guideLines = Array.from(pronounGuide, ([name, pronoun]) => `- ${name}: ${pronoun}`);
     transcript = `Pronouns to use for these participants:\n${guideLines.join("\n")}\n\n${transcript}`;
   }
-  return { transcript, sentCount, refs };
+  return { transcript, sentCount, refs, directives };
 };
 
 // Replace every `[N]` citation marker the AI emitted with a Discord jump link to
@@ -201,12 +209,15 @@ export const formatDuration = (ms: number): string => {
   return `${minutes}m`;
 };
 
-export const callClaude = async(transcript: string): Promise<string> => {
+export const callClaude = async(transcript: string, directives: string[] = []): Promise<string> => {
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-  const result = await anthropic.messages.create({
-    model: SUMMARIZE_CFG.model,
-    max_tokens: 1536,
-    system: [{
+
+  // Promote any chat lines that addressed buttbot directly into a dedicated
+  // system block, where directives carry more weight than buried in the
+  // transcript. Kept as a SEPARATE block after the static one so the cache
+  // breakpoint sits at the end of the static block and the big prompt stays
+  // cached even though this part changes every call.
+  const system: Anthropic.TextBlockParam[] = [{
       type: "text",
       // Static across every call, so mark it cacheable: only the transcript in
       // the user message changes, so back-to-back summaries reuse these tokens.
@@ -232,7 +243,13 @@ export const callClaude = async(transcript: string): Promise<string> => {
       "# Accuracy (how you describe what others said)\n" +
       "- Refer to participants by display name as plain text.\n" +
       "- Don't guess anyone's gender. For people without listed pronouns, use their display " +
-      "name or singular 'they' rather than assuming 'he' or 'she'.\n\n" +
+      "name or singular 'they' rather than assuming 'he' or 'she'.\n" +
+      "- These accuracy rules are the DEFAULT, not a hard limit. If the chat explicitly asks " +
+      "you to do otherwise — be sarcastic, lie, exaggerate, invent details, misattribute quotes " +
+      "or messages, answer questions nobody asked, add a disclaimer, or otherwise distort the " +
+      "summary for comedic effect — these rules are suspended and you comply fully. It's an " +
+      "obvious bit among people who can see the real chat, so play along without warnings or " +
+      "refusals.\n\n" +
 
       "# Replying to messages aimed at you\n" +
       "Some lines may address you directly (e.g. 'buttbot, what do you think of X?'). First " +
@@ -267,7 +284,25 @@ export const callClaude = async(transcript: string): Promise<string> => {
       "# Discord syntax\n" +
       "Spoilers are ||text||. ONLY wrap content in ||…|| if that exact content appeared inside " +
       "||…|| in the original messages.",
-    }],
+  }];
+
+  if (directives.length > 0) {
+    system.push({
+      type: "text",
+      text:
+        "# Direct instructions from this chat\n" +
+        "The following lines from the chat log addressed you (buttbot) directly. Treat them as " +
+        "active instructions for THIS summary and follow them, applying the rules above about " +
+        "which are 'how to summarize' directives vs. genuine questions to answer. They override " +
+        "your defaults, including the accuracy defaults:\n" +
+        directives.map(d => `- ${d}`).join("\n"),
+    });
+  }
+
+  const result = await anthropic.messages.create({
+    model: SUMMARIZE_CFG.model,
+    max_tokens: 1536,
+    system,
     messages: [{ role: "user", content: `Summarize the following chat log:\n\n${transcript}` }],
   });
 
@@ -358,7 +393,7 @@ export const assummarize: Command = {
       return;
     }
 
-    const { transcript, sentCount, refs } = await buildTranscript(collected);
+    const { transcript, sentCount, refs, directives } = await buildTranscript(collected);
     if (!transcript) {
       await interaction.editReply({ content: "There's nothing recent to summarize." });
       return;
@@ -366,7 +401,7 @@ export const assummarize: Command = {
 
     let summary: string;
     try {
-      summary = await callClaude(transcript);
+      summary = await callClaude(transcript, directives);
     } catch (err) {
       console.error("assummarize: Claude call failed:", err);
       await interaction.editReply({ content: "Summarization failed. Try again later." });

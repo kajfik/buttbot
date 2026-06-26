@@ -155,7 +155,7 @@ export const assummary: Command = {
         return;
       }
 
-      const { transcript, sentCount, refs } = await buildTranscript(collected);
+      const { transcript, sentCount, refs, directives } = await buildTranscript(collected);
       if (!transcript) {
         await interaction.editReply({ content: "There's nothing recent to summarize." });
         return;
@@ -163,7 +163,7 @@ export const assummary: Command = {
 
       let summary: string;
       try {
-        summary = await callClaude(transcript);
+        summary = await callClaude(transcript, directives);
       } catch (err) {
         console.error("assummary test: Claude call failed:", err);
         await interaction.editReply({ content: "Summarization failed. Try again later." });
