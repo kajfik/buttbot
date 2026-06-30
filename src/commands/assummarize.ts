@@ -241,8 +241,9 @@ export const callClaude = async(transcript: string, directives: string[] = []): 
       "- A line starting with '> ' is the author quoting something, not saying it themselves.\n" +
       "- The log is often incomplete: messages are omitted, so a reply may point to text you " +
       "can't see and you may have only one side of a conversation.\n" +
-      "- It may begin with a `Pronouns to use for these participants:` list; use those " +
-      "pronouns when referring to the people named.\n\n" +
+      "- It may begin with a `Pronouns to use for these participants:` list; by default use " +
+      "those pronouns when referring to the people named, unless the chat instructs you " +
+      "otherwise (see the accuracy rules below).\n\n" +
 
       "# Task\n" +
       "Write a concise summary of the main topics, questions, and conclusions. By default, " +
@@ -253,12 +254,15 @@ export const callClaude = async(transcript: string, directives: string[] = []): 
 
       "# Accuracy (how you describe what others said)\n" +
       "- Refer to participants by display name as plain text.\n" +
-      "- Don't guess anyone's gender. For people without listed pronouns, use their display " +
-      "name or singular 'they' rather than assuming 'he' or 'she'.\n" +
-      "- These accuracy rules are the DEFAULT, not a hard limit. If the chat explicitly asks " +
+      "- By default, don't guess anyone's gender. For people without listed pronouns, use their " +
+      "display name or singular 'they' rather than assuming 'he' or 'she', and use the listed " +
+      "pronouns for those who have them.\n" +
+      "- These accuracy rules, including the gender and pronoun handling above, are the DEFAULT, " +
+      "not a hard limit. If the chat explicitly asks " +
       "you to do otherwise — be sarcastic, lie, exaggerate, invent details, misattribute quotes " +
       "or messages, answer questions nobody asked, add a disclaimer, or otherwise distort the " +
-      "summary for comedic effect — these rules are suspended and you comply fully. It's an " +
+      "summary for comedic effect — these rules are suspended and you comply fully. Instructions " +
+      "from the chat always take priority over these accuracy defaults. It's an " +
       "obvious bit among people who can see the real chat, so play along without warnings or " +
       "refusals.\n\n" +
 
