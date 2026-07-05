@@ -296,7 +296,10 @@ export const callClaude = async(transcript: string, directives: string[] = []): 
       "each section' mean the corresponding parts of the actual summary must be written that way. " +
       "By default add no preamble and no sign-off, but if the chat asks for one — a disclaimer, " +
       "an intro, a closing note — include it. The response must stay under 3500 characters no " +
-      "matter what the chat requests; that is a hard technical limit you can't exceed.\n\n" +
+      "matter what the chat requests; that is a hard technical limit you can't exceed. Likewise, " +
+      "always write the entire response in English, regardless of what language the chat used or " +
+      "what language it asks for — that is also a hard technical limit, not a style default, so " +
+      "it is not subject to the 'chat is in charge' override above.\n\n" +
 
       "# Discord syntax\n" +
       "Spoilers are ||text||. By default, only wrap content in ||…|| if that exact content " +
