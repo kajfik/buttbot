@@ -6,7 +6,7 @@ import { Command } from "../command";
 import { ids } from "../config.json";
 import { tags } from "../bot";
 import {
-  EMBED_DESCRIPTION_LIMIT, buildTranscript, callClaude, collectRecentMessages,
+  EMBED_DESCRIPTION_LIMIT, buildTranscript, callClaude, callClaudeRaw, collectRecentMessages,
   formatDuration, linkifyCitations
 } from "./assummarize";
 
@@ -108,7 +108,15 @@ export const assummary: Command = {
     {
       name: "test",
       description: "Show an ephemeral summary of the last 200 messages (no cooldown).",
-      type: ApplicationCommandOptionType.Subcommand
+      type: ApplicationCommandOptionType.Subcommand,
+      options: [
+        {
+          name: "raw",
+          description: "Send Claude only the raw chat lines, with no system prompt or directives.",
+          type: ApplicationCommandOptionType.Boolean,
+          required: false
+        }
+      ]
     }
   ],
   run: async(interaction: ChatInputCommandInteraction) => {
@@ -144,6 +152,8 @@ export const assummary: Command = {
         return;
       }
 
+      const raw = interaction.options.getBoolean("raw") ?? false;
+
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
       let collected: Message[];
@@ -163,7 +173,7 @@ export const assummary: Command = {
 
       let summary: string;
       try {
-        summary = await callClaude(transcript, directives);
+        summary = raw ? await callClaudeRaw(transcript) : await callClaude(transcript, directives);
       } catch (err) {
         console.error("assummary test: Claude call failed:", err);
         await interaction.editReply({ content: "Summarization failed. Try again later." });
@@ -180,9 +190,10 @@ export const assummary: Command = {
         ? `${cited.slice(0, EMBED_DESCRIPTION_LIMIT - 1)}…`
         : cited;
 
+      const titlePrefix = raw ? "test, raw (no system prompt)" : "test";
       const embed = new EmbedBuilder()
         .setColor(Colors.DarkAqua)
-        .setTitle(`Channel summary (test, last ${periodLabel}, ${sentCount}/${collected.length} messages sent to AI)`)
+        .setTitle(`Channel summary (${titlePrefix}, last ${periodLabel}, ${sentCount}/${collected.length} messages sent to AI)`)
         .setDescription(description)
         .setFooter({
           text: `Requested by ${interaction.user.username} • model: ${SUMMARIZE_CFG.model} • test command`,

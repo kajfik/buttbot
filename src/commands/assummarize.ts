@@ -339,6 +339,30 @@ export const callClaude = async(transcript: string, directives: string[] = []): 
   return text;
 };
 
+// TEST ONLY: sends Claude the raw transcript with no system prompt and no
+// promoted directives block — just the opted-in chat lines, verbatim, as the
+// entire user message. Used by /assummary test's `raw` option to see how the
+// model behaves with none of the persona/formatting/"chat is in charge"
+// instructions from callClaude. Not used by production /assummarize.
+export const callClaudeRaw = async(transcript: string): Promise<string> => {
+  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+  const result = await anthropic.messages.create({
+    model: SUMMARIZE_CFG.model,
+    max_tokens: 1536,
+    messages: [{ role: "user", content: transcript }],
+  });
+
+  const text = result.content
+    .filter((block): block is Anthropic.TextBlock => block.type === "text")
+    .map(block => block.text)
+    .join("")
+    .trim();
+
+  if (!text) throw new Error("Claude returned no text content.");
+  return text;
+};
+
 export const assummarize: Command = {
   name: "assummarize",
   description: "Summarizes recent discussion in this channel using AI.",
