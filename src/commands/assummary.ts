@@ -1,27 +1,21 @@
 import {
   ApplicationCommandOptionType, ApplicationCommandType, ChatInputCommandInteraction,
-  Colors, EmbedBuilder, Message, MessageFlags, TextBasedChannel
+  Colors, EmbedBuilder, Message, MessageFlags
 } from "discord.js";
 import { Command } from "../command";
 import { ids } from "../config.json";
 import { tags } from "../bot";
 import {
-  EMBED_DESCRIPTION_LIMIT, buildTranscript, callClaude, callClaudeRaw, collectRecentMessages,
-  formatDuration, linkifyCitations
+  buildTranscript, callClaude, callClaudeRaw, collectRecentMessages, composeDescription,
+  countNewMessagesSince, formatDuration, linkifyCitations
 } from "./assummarize";
+import { buildSecretWordSection } from "../secretWord";
 
 const TEST_MESSAGE_LIMIT = 200;
 
 const SUMMARIZE_CFG = ids.AD.summarize;
 
 const stateKey = (guildId: string, channelId: string) => `${guildId}:${channelId}`;
-
-// Count messages posted after the last summarized message, capped at the
-// cooldown threshold (mirrors the check in assummarize.ts).
-const countNewMessagesSince = async(channel: TextBasedChannel, anchorId: string): Promise<number> => {
-  const fetched = await channel.messages.fetch({ after: anchorId, limit: SUMMARIZE_CFG.cooldownMessages });
-  return fetched.size;
-};
 
 // Build a line describing when /assummarize can next be run in this channel.
 // /assummarize requires BOTH the time cooldown to elapse AND enough new
@@ -112,7 +106,7 @@ export const assummary: Command = {
       options: [
         {
           name: "raw",
-          description: "Send Claude only the raw chat lines, with no system prompt or directives.",
+          description: "Send Claude only the raw chat lines, with no system prompt.",
           type: ApplicationCommandOptionType.Boolean,
           required: false
         }
@@ -165,15 +159,21 @@ export const assummary: Command = {
         return;
       }
 
-      const { transcript, sentCount, refs, directives } = await buildTranscript(collected);
+      const { transcript, sentCount, refs } = await buildTranscript(collected);
       if (!transcript) {
         await interaction.editReply({ content: "There's nothing recent to summarize." });
         return;
       }
 
+      // `raw` exists to show the model with no prompting of ours at all, so it
+      // skips the secret word game — that's a separate prompted call.
       let summary: string;
+      let secretSection: string | null;
       try {
-        summary = raw ? await callClaudeRaw(transcript) : await callClaude(transcript, directives);
+        [summary, secretSection] = await Promise.all([
+          raw ? callClaudeRaw(transcript) : callClaude(transcript),
+          raw ? Promise.resolve(null) : buildSecretWordSection(collected),
+        ]);
       } catch (err) {
         console.error("assummary test: Claude call failed:", err);
         await interaction.editReply({ content: "Summarization failed. Try again later." });
@@ -186,9 +186,7 @@ export const assummary: Command = {
 
       const linkBase = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}`;
       const cited = linkifyCitations(summary, refs, linkBase);
-      const description = cited.length > EMBED_DESCRIPTION_LIMIT
-        ? `${cited.slice(0, EMBED_DESCRIPTION_LIMIT - 1)}…`
-        : cited;
+      const description = composeDescription(cited, secretSection);
 
       const titlePrefix = raw ? "test, raw (no system prompt)" : "test";
       const embed = new EmbedBuilder()

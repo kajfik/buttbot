@@ -7,11 +7,16 @@
       "summarize": {
         "channelID": "416286671202549771",
         "cooldownMs": 18000000,
-        "cooldownMessages": 100,
+        "cooldownMessages": 250,
         "messageLimit": 100,
         "windowMs": 86400000,
         "maxMessages": 2000,
-        "model": "claude-sonnet-4-6"
+        "model": "claude-sonnet-4-6",
+        "secretWord": {
+          "reactionFetchLimit": 250,
+          "maxUsers": 80,
+          "maxEmotesPerUser": 25
+        }
       }
     }
   }
