@@ -9,7 +9,7 @@ import {
   buildTranscript, callClaude, callClaudeRaw, collectRecentMessages, composeDescription,
   countNewMessagesSince, formatDuration, linkifyCitations
 } from "./assummarize";
-import { buildSecretWordSection } from "../secretWord";
+// import { buildSecretWordSection } from "../secretWord";
 
 const TEST_MESSAGE_LIMIT = 200;
 
@@ -167,13 +167,15 @@ export const assummary: Command = {
 
       // `raw` exists to show the model with no prompting of ours at all, so it
       // skips the secret word game — that's a separate prompted call.
+      // Disabled: the secret word section is left out of the summary for now.
       let summary: string;
-      let secretSection: string | null;
+      const secretSection: string | null = null;
       try {
-        [summary, secretSection] = await Promise.all([
-          raw ? callClaudeRaw(transcript) : callClaude(transcript),
-          raw ? Promise.resolve(null) : buildSecretWordSection(collected),
-        ]);
+        summary = await (raw ? callClaudeRaw(transcript) : callClaude(transcript));
+        // [summary, secretSection] = await Promise.all([
+        //   raw ? callClaudeRaw(transcript) : callClaude(transcript),
+        //   raw ? Promise.resolve(null) : buildSecretWordSection(collected),
+        // ]);
       } catch (err) {
         console.error("assummary test: Claude call failed:", err);
         await interaction.editReply({ content: "Summarization failed. Try again later." });

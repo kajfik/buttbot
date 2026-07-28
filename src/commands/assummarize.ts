@@ -6,7 +6,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { Command } from "../command";
 import { ids } from "../config.json";
 import { tags } from "../bot";
-import { buildSecretWordSection } from "../secretWord";
+// import { buildSecretWordSection } from "../secretWord";
 
 const SUMMARIZE_CFG = ids.AD.summarize;
 export const EMBED_DESCRIPTION_LIMIT = 4000;
@@ -440,13 +440,15 @@ export const assummarize: Command = {
     // The secret word game reads the same messages but talks to Claude on its
     // own, so run it alongside the summary rather than after it. It resolves to
     // null instead of throwing, so only a failed summary aborts here.
+    // Disabled: the secret word section is left out of the summary for now.
     let summary: string;
-    let secretSection: string | null;
+    const secretSection: string | null = null;
     try {
-      [summary, secretSection] = await Promise.all([
-        callClaude(transcript),
-        buildSecretWordSection(collected),
-      ]);
+      summary = await callClaude(transcript);
+      // [summary, secretSection] = await Promise.all([
+      //   callClaude(transcript),
+      //   buildSecretWordSection(collected),
+      // ]);
     } catch (err) {
       console.error("assummarize: Claude call failed:", err);
       await interaction.editReply({ content: "Summarization failed. Try again later." });
