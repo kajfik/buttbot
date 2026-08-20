@@ -6,8 +6,8 @@ import { Command } from "../command";
 import { ids } from "../config.json";
 import { tags } from "../bot";
 import {
-  buildTranscript, callClaude, callClaudeRaw, collectRecentMessages, composeDescription,
-  countNewMessagesSince, formatDuration, linkifyCitations
+  SummaryOutcome, buildTranscript, callClaudeRaw, collectRecentMessages, composeDescription,
+  countNewMessagesSince, formatDuration, linkifyCitations, produceSummary
 } from "./assummarize";
 // import { buildSecretWordSection } from "../secretWord";
 
@@ -106,7 +106,7 @@ export const assummary: Command = {
       options: [
         {
           name: "raw",
-          description: "Send Claude only the raw chat lines, with no system prompt.",
+          description: "Send Claude only the raw chat lines: no system prompt, no chat requests, no guard.",
           type: ApplicationCommandOptionType.Boolean,
           required: false
         }
@@ -159,28 +159,27 @@ export const assummary: Command = {
         return;
       }
 
-      const { transcript, sentCount, refs } = await buildTranscript(collected);
+      const { transcript, sentCount, refs, directives } = await buildTranscript(collected);
       if (!transcript) {
         await interaction.editReply({ content: "There's nothing recent to summarize." });
         return;
       }
 
       // `raw` exists to show the model with no prompting of ours at all, so it
-      // skips the secret word game — that's a separate prompted call.
+      // skips the guard too — the point is to see the unguarded output.
       // Disabled: the secret word section is left out of the summary for now.
-      let summary: string;
       const secretSection: string | null = null;
+      let outcome: SummaryOutcome;
       try {
-        summary = await (raw ? callClaudeRaw(transcript) : callClaude(transcript));
-        // [summary, secretSection] = await Promise.all([
-        //   raw ? callClaudeRaw(transcript) : callClaude(transcript),
-        //   raw ? Promise.resolve(null) : buildSecretWordSection(collected),
-        // ]);
+        outcome = raw
+          ? { summary: await callClaudeRaw(transcript), degraded: false, reason: null }
+          : await produceSummary(transcript, directives, sentCount);
       } catch (err) {
         console.error("assummary test: Claude call failed:", err);
         await interaction.editReply({ content: "Summarization failed. Try again later." });
         return;
       }
+      const summary = outcome.summary;
 
       const newestTs = collected[0].createdTimestamp;
       const oldestTs = collected[collected.length - 1].createdTimestamp;
@@ -196,7 +195,10 @@ export const assummary: Command = {
         .setTitle(`Channel summary (${titlePrefix}, last ${periodLabel}, ${sentCount}/${collected.length} messages sent to AI)`)
         .setDescription(description)
         .setFooter({
-          text: `Requested by ${interaction.user.username} • model: ${SUMMARIZE_CFG.model} • test command`,
+          text:
+            `Requested by ${interaction.user.username} • model: ${SUMMARIZE_CFG.model} • ` +
+            (outcome.degraded ? `guard: retried without chat requests (${outcome.reason}) • ` : "") +
+            "test command",
         })
         .setTimestamp();
 
