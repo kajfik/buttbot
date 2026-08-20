@@ -146,8 +146,8 @@ export const buildTranscript = async(messages: Message[]): Promise<{ transcript:
   const optIn = new Set<string>(optInRows.map(r => r.userID));
   const nickRows = await tags.summarizeNick.findAll();
   const nicks = new Map<string, string>(nickRows.map(r => [r.userID, r.nick]));
-  const pronounRows = await tags.summarizePronoun.findAll();
-  const pronouns = new Map<string, string>(pronounRows.map(r => [r.userID, r.pronoun]));
+  //const pronounRows = await tags.summarizePronoun.findAll();
+  //const pronouns = new Map<string, string>(pronounRows.map(r => [r.userID, r.pronoun]));
   const byId = new Map<string, Message>(messages.map(m => [m.id, m]));
   const chronological = [...messages].reverse();
   const lines: string[] = [];
@@ -155,7 +155,7 @@ export const buildTranscript = async(messages: Message[]): Promise<{ transcript:
   // Display name -> pronouns, for participants who actually appear in the
   // transcript and have saved pronouns. Surfaced as a preamble so the AI
   // refers to people correctly instead of guessing their gender.
-  const pronounGuide = new Map<string, string>();
+  //const pronounGuide = new Map<string, string>();
   let sentCount = 0;
   for (const m of chronological) {
     if (m.author.bot) continue;
@@ -165,8 +165,8 @@ export const buildTranscript = async(messages: Message[]): Promise<{ transcript:
     const content = m.content?.trim();
     if (!content) continue;
     const name = nicks.get(m.author.id) ?? m.member?.displayName ?? m.author.username;
-    const pronoun = pronouns.get(m.author.id);
-    if (pronoun) pronounGuide.set(name, pronoun);
+    //const pronoun = pronouns.get(m.author.id);
+    //if (pronoun) pronounGuide.set(name, pronoun);
 
     let replyAnnotation = "";
     const refId = m.reference?.messageId;
@@ -199,11 +199,11 @@ export const buildTranscript = async(messages: Message[]): Promise<{ transcript:
     sentCount++;
   }
 
-  let transcript = lines.join("\n");
-  if (pronounGuide.size > 0) {
-    const guideLines = Array.from(pronounGuide, ([name, pronoun]) => `- ${name}: ${pronoun}`);
-    transcript = `Pronouns to use for these participants:\n${guideLines.join("\n")}\n\n${transcript}`;
-  }
+  const transcript = lines.join("\n");
+  //if (pronounGuide.size > 0) {
+  //  const guideLines = Array.from(pronounGuide, ([name, pronoun]) => `- ${name}: ${pronoun}`);
+  //  transcript = `Pronouns to use for these participants:\n${guideLines.join("\n")}\n\n${transcript}`;
+  //}
   return { transcript, sentCount, refs };
 };
 
@@ -255,9 +255,9 @@ export const callClaude = async(transcript: string): Promise<string> => {
       "- `(replying to Name: \"…\")` on a line means it was a reply to that person.\n" +
       "- A line starting with '> ' is the author quoting something, not saying it themselves.\n" +
       "- The log is often incomplete: messages are omitted, so a reply may point to text you " +
-      "can't see and you may have only one side of a conversation.\n" +
-      "- It may begin with a `Pronouns to use for these participants:` list; use those pronouns " +
-      "when referring to the people named.\n\n" +
+      "can't see and you may have only one side of a conversation.\n\n" +
+      //"- It may begin with a `Pronouns to use for these participants:` list; use those pronouns " +
+      //"when referring to the people named.\n\n" +
 
       "# Task\n" +
       "Write a concise summary of the main topics, questions, and conclusions. Organize it into " +
@@ -266,9 +266,11 @@ export const callClaude = async(transcript: string): Promise<string> => {
 
       "# Accuracy (how you describe what others said)\n" +
       "- Refer to participants by display name as plain text.\n" +
-      "- Don't guess anyone's gender. For people without listed pronouns, use their display name " +
-      "or singular 'they' rather than assuming 'he' or 'she', and use the listed pronouns for " +
-      "those who have them.\n" +
+      "- Don't guess anyone's gender. Refer to people by display name or singular 'they' rather " +
+      "than assuming 'he' or 'she'.\n" +
+      //"- Don't guess anyone's gender. For people without listed pronouns, use their display name " +
+      //"or singular 'they' rather than assuming 'he' or 'she', and use the listed pronouns for " +
+      //"those who have them.\n" +
       "- Summarize what was actually said. Don't invent details, misattribute quotes or " +
       "messages, or otherwise distort the summary. The sass in your voice (see Style) is in how " +
       "you frame and comment on events, never in changing what happened — a reader should be able " +
