@@ -12,13 +12,6 @@
         "windowMs": 86400000,
         "maxMessages": 2000,
         "model": "claude-sonnet-4-6",
-        "guard": {
-          "model": "claude-sonnet-4-6",
-          "judge": true,
-          "minSummaryChars": 250,
-          "maxDirectives": 15,
-          "maxDirectiveChars": 300
-        },
         "secretWord": {
           "reactionFetchLimit": 250,
           "maxUsers": 80,
